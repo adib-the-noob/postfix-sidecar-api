@@ -1,0 +1,10 @@
+.commandcode/*
+.commandcodeOPl
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+data/
+*.db
+*.db-wal
+*.db-shm

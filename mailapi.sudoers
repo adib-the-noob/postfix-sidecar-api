@@ -1,0 +1,2 @@
+# Install at /etc/sudoers.d/mailapi with owner root:root and mode 0440.
+mailapi ALL=(root) NOPASSWD: /usr/local/bin/add-domain.sh *
