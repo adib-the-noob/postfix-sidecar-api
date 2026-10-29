@@ -8,7 +8,7 @@ It does three things:
 2. **Verifies DNS** — checks that DKIM, SPF and DMARC records are published correctly.
 3. **Sends mail** — accepts messages for verified domains and hands them to the local Postfix, which signs every message with OpenDKIM.
 
-State is stored in SQLite. There is no inbound mail, no Dovecot and no user login. The HTTP API listens on `127.0.0.1` only.
+State is stored in SQLite. There is no inbound mail, no Dovecot and no user login. The HTTP API listens on `0.0.0.0:8000`, so restrict access with a firewall and put TLS in front before exposing it publicly.
 
 See [AGENT.md](AGENT.md) for the full mail-server setup, architecture and operating rules.
 
@@ -29,7 +29,7 @@ pip install -r requirements-dev.txt
 ./run.sh
 ```
 
-`run.sh` starts uvicorn on <http://127.0.0.1:8000> with auto-reload and these defaults:
+`run.sh` starts uvicorn on port 8000, bound to `0.0.0.0` (use <http://127.0.0.1:8000> locally), with auto-reload and these defaults:
 
 | Variable | Default in `run.sh` |
 |---|---|
@@ -109,7 +109,7 @@ sudo systemctl enable --now mailapi
 sudo systemctl status mailapi
 ```
 
-The unit creates `/var/lib/mailapi` and runs uvicorn on `127.0.0.1:8000` as `mailapi`. The SQLite file is created on the first request.
+The unit creates `/var/lib/mailapi` and runs uvicorn on `0.0.0.0:8000` as `mailapi`. The SQLite file is created on the first request.
 
 ### 5. Verify
 
@@ -298,7 +298,8 @@ The tests mock `subprocess.run`, `dns.resolver.resolve` and `smtplib.SMTP` and p
 
 ## Security notes
 
-- Keep uvicorn on `127.0.0.1`; do not expose port 8000 in the firewall.
+- The API binds `0.0.0.0:8000`, so anyone who can reach that port can attempt requests. Restrict 8000 with a firewall or cloud security group and put TLS (Caddy or another proxy) in front before internet exposure.
+- Only the API routes require `X-API-Key`; `/docs` and `/openapi.json` are unauthenticated. Do not expose the port publicly without a proxy or source allowlist.
 - Treat `MAILAPI_KEY` as a secret: it is stored in `/etc/mailapi.env` (mode 600) and is never logged by the app.
 - The API never runs as root. Its only privileged action is `sudo -n /usr/local/bin/add-domain.sh <domain>`, constrained by `/etc/sudoers.d/mailapi`.
 - `add-domain.sh` must stay root-owned and must never be writable by `mailapi`.

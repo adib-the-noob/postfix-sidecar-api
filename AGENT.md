@@ -16,7 +16,7 @@ It is a PoC: prefer the simplest thing that works. No inbound mail, no Dovecot, 
 
 ```
 client / app
-   | HTTP + X-API-Key  (127.0.0.1:8000)
+   | HTTP + X-API-Key  (0.0.0.0:8000)
    v
 FastAPI sidecar  (on the host, user `mailapi`, systemd unit `mailapi`)
    |- POST /domains  -> sudo -n /usr/local/bin/add-domain.sh <domain>   (runs as root)
@@ -44,7 +44,7 @@ Caddy (Docker, `/opt/caddy`) only obtains the TLS certificate for `mail.metrovps
 | `/usr/local/bin/add-domain.sh` | Root-owned (755). Idempotent: creates the key, appends to both tables, restarts OpenDKIM, prints `mail.txt` |
 | `/var/lib/mailapi/mailapi.db` | SQLite state: `domains(domain TEXT PRIMARY KEY, dkim TEXT, verified INTEGER)` |
 | `/etc/mailapi.env` | `MAILAPI_KEY=...` (mode 600) |
-| `/etc/systemd/system/mailapi.service` | Runs uvicorn on `127.0.0.1:8000` as user `mailapi` |
+| `/etc/systemd/system/mailapi.service` | Runs uvicorn on `0.0.0.0:8000` as user `mailapi` |
 | `/etc/sudoers.d/mailapi` | Lets `mailapi` run only `add-domain.sh` as root |
 | `/etc/opendkim/` | `KeyTable`, `SigningTable`, `keys/<domain>/`. Written only by `add-domain.sh` |
 
@@ -102,7 +102,7 @@ Test domain: `unifyed.tech`. For any change to sending, the received mail in Gma
 - The API never runs as root. Root access is only `sudo -n /usr/local/bin/add-domain.sh`. Don't widen the sudoers rule, and never make the script writable by `mailapi`.
 - Every domain from a request must match the `DOMAIN` regex in `main.py` and in `add-domain.sh`. It ends up in file paths and OpenDKIM tables, so never loosen it.
 - No `shell=True`. Call `subprocess.run` with a list.
-- Keep uvicorn on `127.0.0.1`. Don't open port 8000 in ufw.
+- The API binds `0.0.0.0:8000`, so it is reachable from the network. Do not expose port 8000 to the internet without a firewall and TLS; only the API routes check `X-API-Key` (`/docs` and `/openapi.json` are open).
 - Check the API key with `secrets.compare_digest`. Never log, print or commit it.
 - `/send` must refuse any domain that is not added and verified.
 
@@ -141,7 +141,7 @@ Test domain: `unifyed.tech`. For any change to sending, the received mail in Gma
 1. `DELETE /domains/{d}` via a root-owned `del-domain.sh` (remove the key dir and both table lines, restart OpenDKIM, drop the row) plus a sudoers entry for it.
 2. Bounces: VERP envelope sender on `bounce.metrovps.art`, bounce parsing, suppression list.
 3. Per-domain daily quota, Postfix rate limits, IP warm-up (all clients share one IP and one reputation).
-4. Expose the API through Caddy with the API key. Caddy runs in Docker and the API listens on loopback only, so decide how Caddy reaches it first.
+4. Expose the API through Caddy with TLS and the API key. Caddy runs in Docker; the API binds `0.0.0.0:8000`, so firewall 8000 to the Docker bridge/trusted hosts and proxy to the host.
 5. Retry `/send` automatically on a 451.
 
 ## Ask before you
